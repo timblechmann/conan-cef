@@ -3,10 +3,12 @@ import os
 
 
 class ProtobufTestConan(ConanFile):
-    settings = "os", "compiler", "build_type", "arch"
+    settings = "os", "compiler", "build_type", "arch", "cppstd"
     generators = "cmake"
 
     def build(self):
+        if self.settings.os == "Macos":
+            self.settings.compiler.libcxx = "libc++"
         cmake = CMake(self)
         cmake.definitions['NO_BROWSER_WORKING_TEST'] = "1"
         cmake.configure()
@@ -19,4 +21,7 @@ class ProtobufTestConan(ConanFile):
         self.copy("*", "bin", "bin")
 
     def test(self):
-        self.run(os.path.join(".", "bin", "cefsimple"))
+        if self.settings.os == "Macos":
+            self.run("./bin/cefsimple.app/Contents/MacOS/cefsimple")
+        else:
+            self.run(os.path.join(".", "bin", "cefsimple"))

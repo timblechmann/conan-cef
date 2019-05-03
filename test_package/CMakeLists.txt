@@ -96,20 +96,26 @@ endif()
 #
 
 if(OS_MACOSX)
-  # Output paths for the app bundles.
-  set(CEF_APP "${CEF_TARGET_OUT_DIR}/${CEF_TARGET}.app")
-  set(CEF_HELPER_APP "${CEF_TARGET_OUT_DIR}/${CEF_HELPER_TARGET}.app")
-
-  # Variable referenced from Info.plist files.
-  set(PRODUCT_NAME "${CEF_TARGET}")
+  find_library(Cocoa_FRAMEWORK Cocoa)
 
   # Helper executable target.
-  add_executable(${CEF_HELPER_TARGET} ${CEFSIMPLE_HELPER_SRCS})
-  target_link_libraries(${CEF_HELPER_TARGET} ${CONAN_LIBS})
+  add_executable(helper MACOSX_BUNDLE
+    ${CEFSIMPLE_HELPER_SRCS})
+  target_link_libraries(helper ${CONAN_LIBS})
 
   # Main executable target.
-  add_executable(${CEF_TARGET} ${CEFSIMPLE_RESOURCES_SRCS} ${CEFSIMPLE_SRCS})
-  target_link_libraries(${CEF_TARGET} ${CONAN_LIBS})
+  add_executable(${CEF_TARGET} MACOSX_BUNDLE
+    ${CEFSIMPLE_RESOURCES_SRCS} ${CEFSIMPLE_SRCS})
+  target_link_libraries(${CEF_TARGET} ${CONAN_LIBS} ${Cocoa_FRAMEWORK})
+
+  add_custom_command(TARGET ${CEF_TARGET} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+      "${CONAN_CEF_ROOT}/Chromium Embedded Framework.framework"
+      "$<TARGET_BUNDLE_CONTENT_DIR:${CEF_TARGET}>/Frameworks/Chromium Embedded Framework.framework"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+      "$<TARGET_BUNDLE_DIR:helper>"
+      "$<TARGET_BUNDLE_CONTENT_DIR:${CEF_TARGET}>/Frameworks/${CEF_HELPER_TARGET}.app"
+  )
 endif()
 
 

@@ -1,10 +1,10 @@
 from conans import ConanFile, CMake, tools
 import os
-
+import urllib.parse
 
 class CEFConan(ConanFile):
     name = "cef"
-    version = "3.3578.1860.g36610bd"
+    version = "74.1.13+g98f22d3+chromium-74.0.3729.108"
     description = "The Chromium Embedded Framework (CEF) is an open source framework for embedding a web browser engine which is based on the Chromium core"
     topics = ("conan", "cef", "chromium", "chromium-embedded-framework")
     url = "https://github.com/bincrafters/conan-cef"
@@ -42,22 +42,23 @@ class CEFConan(ConanFile):
             platform += "64"
         return "cef_binary_%s_%s" % (self.version, platform)
 
-    # def config(self):
-        # if self.settings.os == "Windows" and self.settings.compiler == "Visual Studio" and self.settings.compiler.version != "14":
-            # self.options.remove("use_sandbox") # it requires to be built with that exact version for sandbox support
+    def config(self):
+        if self.settings.os == "Windows" and self.settings.compiler == "Visual Studio" and self.settings.compiler.version != "14":
+            self.options.remove("use_sandbox") # it requires to be built with that exact version for sandbox support
 
-    def source(self):
+        #Hack when not using xcode clang
+        if self.settings.os == "Macos":
+            self.settings.compiler.libcxx = "libc++"
+
+    def _download(self):
         self.output.info("Downloading CEF prebuilts from opensource.spotify.com/cefbuilds/index.html")
 
         cef_download_filename ="{}.tar.bz2".format(self.get_cef_distribution_name())
-        archive_url = "http://opensource.spotify.com/cefbuilds/{}".format(cef_download_filename)
+        archive_url = "http://opensource.spotify.com/cefbuilds/{}".format(urllib.parse.quote(cef_download_filename))
         tools.get(archive_url)
         os.rename(self.get_cef_distribution_name(), self._source_subfolder)
 
         cmake_vars_file = "{}/cmake/cef_variables.cmake".format(self._source_subfolder)
-        if self.settings.compiler == "Visual Studio" and not (self.settings.compiler.runtime == "MT" or self.settings.compiler.runtime == "MTd"):
-            tools.replace_in_file(cmake_vars_file, "/MT           # Multithreaded release runtime", "/MD           # Multithreaded release runtime")
-            tools.replace_in_file(cmake_vars_file, "/MDd          # Multithreaded debug runtime", "/MDd          # Multithreaded debug runtime")
 
         #
         # Clang Patch, for Linux & MacOS (should be theoretically not necessary with CEF >= 2987)
@@ -71,8 +72,6 @@ class CEFConan(ConanFile):
                   -Wno-undefined-var-template   # Don't warn about potentially uninstantiated static members
                   )
             endif()""")
-
-        tools.replace_in_file(cmake_vars_file, 'set(CEF_DEBUG_INFO_FLAG "/Zi"', 'set(CEF_DEBUG_INFO_FLAG "{}"'.format(self.options.debug_info_flag_vs))
 
     def system_requirements(self):
         if self.settings.os == "Linux" and tools.os_info.is_linux:
@@ -103,20 +102,21 @@ class CEFConan(ConanFile):
 
     def _configure_cmake(self):
         cmake = CMake(self)
-        cmake.definitions["CEF_ROOT"] = self._source_subfolder
+        cmake.definitions["CEF_ROOT"] = os.path.join(self.source_folder, self._source_subfolder)
         cmake.definitions["USE_SANDBOX"] = "ON" if self.options.use_sandbox else "OFF"
+        if self.settings.compiler == "Visual Studio":
+            cmake.definitions["CEF_RUNTIME_LIBRARY_FLAG"] = "/" + str(self.settings.compiler.runtime)
+            cmake.definitions["CEF_DEBUG_INFO_FLAG"] = self.options.debug_info_flag_vs
 
         cmake.configure(build_folder=self._build_subfolder)
         return cmake
 
     def build(self):
+        self._download()
         cmake = self._configure_cmake()
         cmake.build()
 
     def package(self):
-        cmake = self._configure_cmake()
-        cmake.install()
-
         # Copy headers
         self.copy('*', dst='include/include', src='{}/include'.format(self._source_subfolder))
 
@@ -136,7 +136,13 @@ class CEFConan(ConanFile):
             if self.options.use_sandbox:
                 self.copy("chrome-sandbox", dst="bin", src=dis_folder, keep_path=False)
             self.copy("*cef_dll_wrapper.a", dst="lib", keep_path=False)
-        if self.settings.os == "Windows":
+        elif self.settings.os == "Macos":
+            # CEF binaries: (Taken from cmake/cef_variables)
+            self.copy("Chromium Embedded Framework.framework/*", src=dis_folder, symlinks=True)
+            if self.options.use_sandbox:
+                self.copy("cef-sandbox.a", dst="bin", src=dis_folder, keep_path=False)
+            self.copy("*cef_dll_wrapper.a", dst="lib", keep_path=False)
+        elif self.settings.os == "Windows":
             # CEF binaries: (Taken from cmake/cef_variables)
             self.copy("*.dll", dst="bin", src=dis_folder, keep_path=False)
             self.copy("libcef.lib", dst="lib", src=dis_folder, keep_path=False)
@@ -147,7 +153,12 @@ class CEFConan(ConanFile):
             self.copy("*cef_dll_wrapper.lib", dst="lib", keep_path=False)  # libcef_dll_wrapper is somewhere else
 
     def package_info(self):
-        if self.settings.compiler == "Visual Studio":
+        if self.settings.os == "Macos":
+            self.cpp_info.libs.append("cef_dll_wrapper")
+            f_location = '-F "%s"' % self.package_folder
+            self.cpp_info.exelinkflags.extend([f_location, '-framework "Chromium Embedded Framework"'])
+            self.cpp_info.sharedlinkflags = self.cpp_info.exelinkflags
+        elif self.settings.compiler == "Visual Studio":
             self.cpp_info.libs = ["libcef_dll_wrapper", "libcef"]
         else:
             self.cpp_info.libs = ["cef_dll_wrapper", "cef"]

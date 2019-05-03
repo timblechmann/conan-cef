@@ -143,8 +143,10 @@ int main(int argc, char* argv[]) {
   // Shut down CEF.
   CefShutdown();
 
+#ifndef NO_BROWSER_WORKING_TEST
   // Release the delegate.
   [delegate release];
+#endif
 
   // Release the AutoRelease pool.
   [autopool release];
