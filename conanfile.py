@@ -133,6 +133,7 @@ class CEFConan(ConanFile):
             self.copy("libcef.so", dst="lib", src=dis_folder, keep_path=False)
             self.copy("natives_blob.bin", dst="bin", src=dis_folder, keep_path=False)
             self.copy("snapshot_blob.bin", dst="bin", src=dis_folder, keep_path=False)
+            self.copy("v8_context_snapshot.bin", dst="bin", src=dis_folder, keep_path=False)
             if self.options.use_sandbox:
                 self.copy("chrome-sandbox", dst="bin", src=dis_folder, keep_path=False)
             self.copy("*cef_dll_wrapper.a", dst="lib", keep_path=False)
@@ -148,6 +149,7 @@ class CEFConan(ConanFile):
             self.copy("libcef.lib", dst="lib", src=dis_folder, keep_path=False)
             self.copy("natives_blob.bin", dst="bin", src=dis_folder, keep_path=False)
             self.copy("snapshot_blob.bin", dst="bin", src=dis_folder, keep_path=False)
+            self.copy("v8_context_snapshot.bin", dst="bin", src=dis_folder, keep_path=False)
             if self.options.use_sandbox:
                 self.copy("cef_sandbox.lib", dst="lib", src=dis_folder, keep_path=False)
             self.copy("*cef_dll_wrapper.lib", dst="lib", keep_path=False)  # libcef_dll_wrapper is somewhere else
