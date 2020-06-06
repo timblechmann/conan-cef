@@ -4,7 +4,7 @@ import urllib.parse
 
 class CEFConan(ConanFile):
     name = "cef"
-    version = "74.1.13+g98f22d3+chromium-74.0.3729.108"
+    version = "74.1.19+gb62bacf+chromium-74.0.3729.157"
     description = "The Chromium Embedded Framework (CEF) is an open source framework for embedding a web browser engine which is based on the Chromium core"
     topics = ("conan", "cef", "chromium", "chromium-embedded-framework")
     url = "https://github.com/bincrafters/conan-cef"
@@ -126,14 +126,14 @@ class CEFConan(ConanFile):
         # resource files: taken from cmake/cef_variables (on macosx we would need to convert the COPY_MACOSX_RESOURCES() function)
         cef_resources = ["cef.pak", "cef_100_percent.pak", "cef_200_percent.pak", "cef_extensions.pak", "devtools_resources.pak", "icudtl.dat", "locales*"]
         for res in cef_resources:
-            self.copy(res, dst="bin", src=res_folder, keep_path=True)
+            self.copy(res, dst="lib", src=res_folder, keep_path=True)
 
         if self.settings.os == "Linux":
             # CEF binaries: (Taken from cmake/cef_variables)
             self.copy("libcef.so", dst="lib", src=dis_folder, keep_path=False)
-            self.copy("natives_blob.bin", dst="bin", src=dis_folder, keep_path=False)
-            self.copy("snapshot_blob.bin", dst="bin", src=dis_folder, keep_path=False)
-            self.copy("v8_context_snapshot.bin", dst="bin", src=dis_folder, keep_path=False)
+            self.copy("natives_blob.bin", dst="lib", src=dis_folder, keep_path=False)
+            self.copy("snapshot_blob.bin", dst="lib", src=dis_folder, keep_path=False)
+            self.copy("v8_context_snapshot.bin", dst="lib", src=dis_folder, keep_path=False)
             if self.options.use_sandbox:
                 self.copy("chrome-sandbox", dst="bin", src=dis_folder, keep_path=False)
             self.copy("*cef_dll_wrapper.a", dst="lib", keep_path=False)
