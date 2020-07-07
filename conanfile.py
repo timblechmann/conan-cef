@@ -4,7 +4,7 @@ import urllib.parse
 
 class CEFConan(ConanFile):
     name = "cef"
-    version = "74.1.19+gb62bacf+chromium-74.0.3729.157"
+    version = "83.4.4+gbabcf94+chromium-83.0.4103.106"
     description = "The Chromium Embedded Framework (CEF) is an open source framework for embedding a web browser engine which is based on the Chromium core"
     topics = ("conan", "cef", "chromium", "chromium-embedded-framework")
     url = "https://github.com/bincrafters/conan-cef"
