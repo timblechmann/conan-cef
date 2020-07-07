@@ -47,8 +47,8 @@ class CEFConan(ConanFile):
             self.options.remove("use_sandbox") # it requires to be built with that exact version for sandbox support
 
         #Hack when not using xcode clang
-        if self.settings.os == "Macos":
-            self.settings.compiler.libcxx = "libc++"
+        #if self.settings.os == "Macos":
+        #    self.settings.compiler.libcxx = "libc++"
 
     def _download(self):
         self.output.info("Downloading CEF prebuilts from opensource.spotify.com/cefbuilds/index.html")
@@ -101,12 +101,19 @@ class CEFConan(ConanFile):
                     installer.install(package)
 
     def _configure_cmake(self):
-        cmake = CMake(self)
+        generator = None
+
+        if tools.is_apple_os(self.settings.os):
+            generator = "Xcode"
+
+        cmake = CMake(self, generator=generator)
         cmake.definitions["CEF_ROOT"] = os.path.join(self.source_folder, self._source_subfolder)
         cmake.definitions["USE_SANDBOX"] = "ON" if self.options.use_sandbox else "OFF"
         if self.settings.compiler == "Visual Studio":
             cmake.definitions["CEF_RUNTIME_LIBRARY_FLAG"] = "/" + str(self.settings.compiler.runtime)
             cmake.definitions["CEF_DEBUG_INFO_FLAG"] = self.options.debug_info_flag_vs
+
+        cmake.definitions["CONAN_CMAKE_CXX_STANDARD"] = 17
 
         cmake.configure(build_folder=self._build_subfolder)
         return cmake
