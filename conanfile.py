@@ -4,12 +4,11 @@ import urllib.parse
 
 class CEFConan(ConanFile):
     name = "cef"
-    version = "83.4.4+gbabcf94+chromium-83.0.4103.106"
+    version = "83.4.2+gc8d4f85+chromium-83.0.4103.106"
     description = "The Chromium Embedded Framework (CEF) is an open source framework for embedding a web browser engine which is based on the Chromium core"
     topics = ("conan", "cef", "chromium", "chromium-embedded-framework")
     url = "https://github.com/bincrafters/conan-cef"
     homepage = "https://bitbucket.org/chromiumembedded/cef"
-    author = "Bincrafters <bincrafters@gmail.com>"
     license = "BSD-3Clause"
     exports = ["LICENSE.md"]
     exports_sources = ["CMakeLists.txt"]
@@ -18,11 +17,13 @@ class CEFConan(ConanFile):
     settings = "os", "compiler", "build_type", "arch"
     options = {
         "use_sandbox": [True, False],
-        "debug_info_flag_vs": ["-Zi", "-Z7"]
+        "debug_info_flag_vs": ["-Zi", "-Z7"],
+        "weak": [True, False],
     }
     default_options = {
         'use_sandbox': False,
-        'debug_info_flag_vs': '-Z7'
+        'debug_info_flag_vs': '-Z7',
+        'weak': True,
     }
 
     _source_subfolder = "source_subfolder"
@@ -42,13 +43,17 @@ class CEFConan(ConanFile):
             platform += "64"
         return "cef_binary_%s_%s" % (self.version, platform)
 
-    def config(self):
+    def configure(self):
         if self.settings.os == "Windows" and self.settings.compiler == "Visual Studio" and self.settings.compiler.version != "14":
-            self.options.remove("use_sandbox") # it requires to be built with that exact version for sandbox support
+            self.options.use_sandbox = False # it requires to be built with that exact version for sandbox support
 
         #Hack when not using xcode clang
         #if self.settings.os == "Macos":
         #    self.settings.compiler.libcxx = "libc++"
+
+        if self.settings.os == "Macos":
+           self.options.use_sandbox = True
+
 
     def _download(self):
         self.output.info("Downloading CEF prebuilts from opensource.spotify.com/cefbuilds/index.html")
@@ -103,15 +108,16 @@ class CEFConan(ConanFile):
     def _configure_cmake(self):
         generator = None
 
-        if tools.is_apple_os(self.settings.os):
-            generator = "Xcode"
-
         cmake = CMake(self, generator=generator)
         cmake.definitions["CEF_ROOT"] = os.path.join(self.source_folder, self._source_subfolder)
         cmake.definitions["USE_SANDBOX"] = "ON" if self.options.use_sandbox else "OFF"
         if self.settings.compiler == "Visual Studio":
             cmake.definitions["CEF_RUNTIME_LIBRARY_FLAG"] = "/" + str(self.settings.compiler.runtime)
             cmake.definitions["CEF_DEBUG_INFO_FLAG"] = self.options.debug_info_flag_vs
+            cmake.definitions["CMAKE_CXX_FLAGS"] = "-DNOMINMAX"
+
+        if self.settings.os == "Macos":
+            cmake.definitions["CMAKE_CXX_FLAGS"] = "-Wno-deprecated-declarations -Wno-undefined-var-template"
 
         cmake.definitions["CONAN_CMAKE_CXX_STANDARD"] = 17
 
@@ -135,6 +141,8 @@ class CEFConan(ConanFile):
         for res in cef_resources:
             self.copy(res, dst="lib", src=res_folder, keep_path=True)
 
+        self.copy("*", dst="cmake", src=self._source_subfolder+"/cmake", keep_path=False)
+
         if self.settings.os == "Linux":
             # CEF binaries: (Taken from cmake/cef_variables)
             self.copy("libcef.so", dst="lib", src=dis_folder, keep_path=False)
@@ -148,7 +156,11 @@ class CEFConan(ConanFile):
             # CEF binaries: (Taken from cmake/cef_variables)
             self.copy("Chromium Embedded Framework.framework/*", src=dis_folder, symlinks=True)
             if self.options.use_sandbox:
-                self.copy("cef-sandbox.a", dst="bin", src=dis_folder, keep_path=False)
+                os.rename(os.path.join(self.source_folder, self._source_subfolder) + "/Release/cef_sandbox.a", 
+                          os.path.join(self.source_folder, self._source_subfolder) + "/Release/libcef_sandbox.a")
+                os.rename(os.path.join(self.source_folder, self._source_subfolder) + "/Debug/cef_sandbox.a", 
+                          os.path.join(self.source_folder, self._source_subfolder) + "/Debug/libcef_sandbox.a")
+                self.copy("libcef_sandbox.a", dst="lib", src=dis_folder, keep_path=False)
             self.copy("*cef_dll_wrapper.a", dst="lib", keep_path=False)
         elif self.settings.os == "Windows":
             # CEF binaries: (Taken from cmake/cef_variables)
@@ -165,17 +177,34 @@ class CEFConan(ConanFile):
         if self.settings.os == "Macos":
             self.cpp_info.libs.append("cef_dll_wrapper")
             f_location = '-F "%s"' % self.package_folder
-            self.cpp_info.exelinkflags.extend([f_location, '-framework "Chromium Embedded Framework"'])
+            if self.options.weak:
+                self.cpp_info.exelinkflags.extend([f_location, '-weak_framework "Chromium Embedded Framework"'])
+            else:
+                self.cpp_info.exelinkflags.extend([f_location, '-framework "Chromium Embedded Framework"'])
             self.cpp_info.sharedlinkflags = self.cpp_info.exelinkflags
         elif self.settings.compiler == "Visual Studio":
+
             self.cpp_info.libs = ["libcef_dll_wrapper", "libcef"]
+
+            if self.options.weak:
+                self.cpp_info.exelinkflags.extend(['-delayload:libcef.dll'])
+                self.cpp_info.sharedlinkflags = self.cpp_info.exelinkflags
+                self.cpp_info.system_libs += ["delayimp"]
+
         else:
             self.cpp_info.libs = ["cef_dll_wrapper", "cef"]
             self.cpp_info.defines += ["_FILE_OFFSET_BITS=64"]
 
         if self.options.use_sandbox:
-            if self.settings.os == "Windows":
-                self.cpp_info.libs += ["cef_sandbox", "dbghelp", "psapi", "version", "winmm"]
             self.cpp_info.defines += ["USE_SANDBOX", "CEF_USE_SANDBOX", "PSAPI_VERSION=1"]
+
+            if self.settings.os == "Windows":
+                self.cpp_info.libs += ["cef_sandbox"]
+                self.cpp_info.system_libs += ["dbghelp", "psapi", "version", "winmm"]
+                self.cpp_info.defines += ["PSAPI_VERSION=1"]
+
+            if self.settings.os == "Macos":
+                self.cpp_info.libs += ["cef_sandbox"]
+
         if self.settings.os == "Windows":
-            self.cpp_info.libs += ["glu32", "opengl32", "comctl32", "rpcrt4", "shlwapi", "ws2_32"]
+            self.cpp_info.system_libs += ["glu32", "opengl32", "comctl32", "rpcrt4", "shlwapi", "ws2_32"]
